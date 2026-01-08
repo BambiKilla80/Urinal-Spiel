@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Das Pissoir-Spiel</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #ffffff;
+    color: #000;
+    font-family: Arial, sans-serif;
+}
+
+h1 {
+    text-align: center;
+    margin: 15px 0 5px;
+}
+
+#levelInfo, #message {
+    text-align: center;
+    min-height: 40px;
+}
+
+#game-wrapper {
+    width: 100%;
+    height: 70vh;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#game {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    position: relative;
+}
+
+/* Bodenlinie */
+#floor {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 10px;
+    background: #000;
+    z-index: 1;
+}
+
+/* Spacer */
+.spacer-10 { width: 10%; }
+.spacer-5  { width: 5%; }
+
+/* Spots */
+.spot {
+    position: relative;
+    height: 100%;
+    width: auto;
+    cursor: pointer;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    transition: transform 0.2s;
+    z-index: 2;
+}
+
+.spot:hover {
+    transform: scale(1.05);
+}
+
+.urinal { width: 15%; }
+.door   { width: 20%; }
+
+/* Urinal: kleiner + 20% höher */
+.urinal img:first-child {
+    width: 60%;
+    position: absolute;
+    bottom: 8%;
+}
+
+/* Tür steht auf Boden */
+.door img {
+    width: 100%;
+    position: absolute;
+    bottom: 0;
+}
+
+/* Mann steht auf Boden, 10% höher */
+.mann {
+    position: absolute;
+    bottom: 0;
+    width: 75%;          /* ← wirkt jetzt */
+    transform: translateY(+5%);
+    pointer-events: none;
+}
+
+/* Feedback */
+.correct {
+    box-shadow: 0 0 20px 5px #2c8b3a;
+}
+
+.wrong {
+    box-shadow: 0 0 20px 5px #8b2c2c;
+}
+
+button {
+    display: none;
+    margin: 10px auto;
+    padding: 10px 20px;
+    background: #ddd;
+    border: none;
+    border-radius: 5px;
+    color: #000;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #bbb;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🚻 Das Pissoir-Spiel</h1>
+<div id="levelInfo"></div>
+
+<div id="game-wrapper">
+    <div id="game">
+        <div id="floor"></div>
+    </div>
+</div>
+
+<div id="message"></div>
+<button id="restart" onclick="restartGame()">Nochmal spielen</button>
+
+<script>
+const IMG_URINAL = "https://raw.githubusercontent.com/BambiKilla80/Urinal-Spiel/refs/heads/main/urinal.png";
+const IMG_DOOR   = "https://raw.githubusercontent.com/BambiKilla80/Urinal-Spiel/refs/heads/main/tuer.png";
+const IMG_MANN   = "https://raw.githubusercontent.com/BambiKilla80/Urinal-Spiel/refs/heads/main/mann.png";
+
+const levels = [
+    { occupied: [3], correct: 1, explanation: "Man stellt sich nicht direkt neben jemanden." },
+    { occupied: [1,2], correct: 4, explanation: "Maximaler Abstand ist Pflicht." },
+    { occupied: [1,3], correct: 4, explanation: "Mindestens eine freie Seite." },
+    { occupied: [1,2,4], correct: "door", explanation: "Man geht nicht zwischen zwei Kerlen." }
+];
+
+let currentLevel = 0;
+let locked = false;
+
+function renderLevel() {
+    locked = false;
+    const game = document.getElementById("game");
+    game.innerHTML = '<div id="floor"></div>';
+
+    document.getElementById("message").textContent = "";
+    document.getElementById("levelInfo").textContent =
+        `Level ${currentLevel + 1} von ${levels.length}`;
+
+    game.appendChild(spacer(10));
+
+    for (let i = 1; i <= 4; i++) {
+        const spot = document.createElement("div");
+        spot.className = "spot urinal";
+
+        const img = document.createElement("img");
+        img.src = IMG_URINAL;
+        spot.appendChild(img);
+
+        if (levels[currentLevel].occupied.includes(i)) {
+            const mann = document.createElement("img");
+            mann.src = IMG_MANN;
+            mann.className = "mann";
+            spot.appendChild(mann);
+        } else {
+            spot.onclick = () => select(i, spot);
+        }
+
+        game.appendChild(spot);
+        game.appendChild(spacer(5));
+    }
+
+    const door = document.createElement("div");
+    door.className = "spot door";
+    door.onclick = () => select("door", door);
+
+    const doorImg = document.createElement("img");
+    doorImg.src = IMG_DOOR;
+    door.appendChild(doorImg);
+
+    game.appendChild(door);
+    game.appendChild(spacer(10));
+}
+
+function spacer(percent) {
+    const s = document.createElement("div");
+    s.className = "spacer-" + percent;
+    return s;
+}
+
+function select(choice, el) {
+    if (locked) return;
+    locked = true;
+
+    const level = levels[currentLevel];
+    const msg = document.getElementById("message");
+
+    if (choice === level.correct) {
+        el.classList.add("correct");
+        msg.innerHTML = `<b>Richtig!</b><br>${level.explanation}`;
+        setTimeout(nextLevel, 2000);
+    } else {
+        el.classList.add("wrong");
+        msg.innerHTML = `<b>Falsch.</b><br>${level.explanation}`;
+        setTimeout(renderLevel, 2000);
+    }
+}
+
+function nextLevel() {
+    currentLevel++;
+    if (currentLevel >= levels.length) endGame();
+    else renderLevel();
+}
+
+function endGame() {
+    document.getElementById("game").innerHTML = '<div id="floor"></div>';
+    document.getElementById("message").innerHTML =
+        "<b>Spiel beendet.</b><br>Manchmal ist Gehen die einzig richtige Entscheidung.";
+    document.getElementById("restart").style.display = "block";
+}
+
+function restartGame() {
+    currentLevel = 0;
+    document.getElementById("restart").style.display = "none";
+    renderLevel();
+}
+
+renderLevel();
+</script>
+
+</body>
+</html>
