@@ -141,13 +141,10 @@ html, body {
 #message.end {
     color: #c00000;
     font-weight: bold;
-    position: absolute;
-    bottom: 90px; /* über der Tür */
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80%;
-    pointer-events: none;
+    z-index: 10;       /* höher als die Tür */
+    position: relative; /* wichtig, damit z-index wirkt */
 }
+
 
 /* Feedback Animation */
 .correct { animation: nod 0.4s ease; }
