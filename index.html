@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Das Pissoir-Spiel</title>
+
+<style>
+/* ===== RESET ===== */
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #fff;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+
+/* ===== PAGE LAYOUT ===== */
+#page {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== HEADER ===== */
+#header {
+    text-align: center;
+    padding: 14px 0 6px;
+}
+
+#header h1 {
+    margin: 0;
+    font-size: clamp(24px, 4.5vw, 38px);
+}
+
+/* ===== INFO ===== */
+#info {
+    flex: 1 1 auto;
+    padding: 8px 10%;
+    box-sizing: border-box;
+    text-align: center;
+    overflow-y: auto;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+}
+
+#levelInfo {
+    font-size: 17px;
+    opacity: 0.7;
+}
+
+/* Meldung mit Fade */
+#message {
+    font-size: clamp(19px, 3.5vw, 22px);
+    line-height: 1.45;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+}
+#message.show {
+    opacity: 1;
+}
+
+/* ===== GAME ===== */
+#game-wrapper {
+    flex: 0 0 55vh;
+    position: relative;
+}
+
+#game {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    position: relative;
+    transform: translateY(-20%); /* höher für Mobile */
+}
+
+/* Boden */
+#floor {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    height: 4px;
+    background: #000;
+}
+
+/* Spacer */
+.spacer-10 { width: 10%; }
+.spacer-5  { width: 5%; }
+
+/* Spots */
+.spot {
+    position: relative;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.urinal { width: 15%; }
+.door   { width: 20%; }
+
+/* Urinal */
+.urinal-img {
+    width: 60%;
+    position: absolute;
+    bottom: 0;
+    transform: translateY(-25%);
+}
+
+/* Tür */
+.door img {
+    width: 100%;
+    position: absolute;
+    bottom: 0;
+}
+
+/* Mann */
+.mann {
+    position: absolute;
+    bottom: 0;
+    width: 75%;
+    pointer-events: none;
+}
+
+.outside-door {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 20%;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+#message.end {
+    color: #c00000;
+    font-weight: bold;
+    position: absolute;
+    bottom: 90px; /* über der Tür */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    pointer-events: none;
+}
+
+/* Feedback Animation */
+.correct { animation: nod 0.4s ease; }
+.wrong   { animation: shake 0.4s ease; }
+
+@keyframes nod {
+    0% { transform: translateY(-10%) scale(1); }
+    50% { transform: translateY(-12%) scale(1.02); }
+    100% { transform: translateY(-10%) scale(1); }
+}
+
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    50% { transform: translateX(4px); }
+    75% { transform: translateX(-4px); }
+    100% { transform: translateX(0); }
+}
+
+/* ===== CONTROLS ===== */
+#controls {
+    padding: 10px 0 env(safe-area-inset-bottom);
+    display: flex;
+    justify-content: center;
+}
+
+button {
+    display: none;
+    padding: 15px 36px;
+    font-size: 18px;
+    border-radius: 12px;
+    border: none;
+    background: #ddd;
+}
+button:hover {
+    background: #bbb;
+}
+</style>
+</head>
+
+<body>
+
+<div id="page">
+
+<header id="header">
+    <h1>Das Pissoir-Spiel</h1>
+</header>
+
+<div id="info">
+    <div id="levelInfo"></div>
+    <div id="message"></div>
+</div>
+
+<div id="game-wrapper">
+    <div id="game">
+        <div id="floor"></div>
+    </div>
+</div>
+
+<div id="controls">
+    <button id="restart" onclick="restartGame()">Nochmal spielen</button>
+</div>
+
+</div>
+
+<script>
+const IMG_URINAL = "https://raw.githubusercontent.com/BambiKilla80/Urinal-Spiel/refs/heads/main/urinal.png";
+const IMG_DOOR   = "https://raw.githubusercontent.com/BambiKilla80/Urinal-Spiel/refs/heads/main/tuer.png";
+const IMG_MANN   = "https://raw.githubusercontent.com/BambiKilla80/Urinal-Spiel/refs/heads/main/mann.png";
+const IMG_DOOR_OUTSIDE = "https://raw.githubusercontent.com/BambiKilla80/Urinal-Spiel/refs/heads/main/tuer2.png";
+
+
+const levels = [
+    { occupied: [3], correct: 1, explanation: "Man stellt sich nicht direkt neben jemanden, wenn man es sich vermeiden lässt." },
+    { occupied: [1,2], correct: 4, explanation: "Maximaler Abstand ist Pflicht." },
+    { occupied: [2,4], correct: 1, explanation: "Zumindest eine freie Seite." },
+    { occupied: [1,2,4], correct: "door", explanation: "Man stellt sich nicht einfach zwischen zwei Kerle." }
+];
+
+let currentLevel = 0;
+let locked = false;
+
+function spacer(p) {
+    const d = document.createElement("div");
+    d.className = "spacer-" + p;
+    return d;
+}
+
+function showMessage(text) {
+    const msg = document.getElementById("message");
+    msg.classList.remove("show");
+    setTimeout(() => {
+        msg.innerHTML = text;
+        msg.classList.add("show");
+    }, 50);
+}
+
+function renderLevel() {
+    locked = false;
+    const game = document.getElementById("game");
+    game.innerHTML = '<div id="floor"></div>';
+
+    document.getElementById("levelInfo").textContent =
+        `Level ${currentLevel + 1} von ${levels.length}`;
+
+    if (currentLevel === 0) {
+        showMessage("Wähle das richtige Pissoir");
+    } else {
+        showMessage("");
+    }
+
+    game.appendChild(spacer(10));
+
+    for (let i = 1; i <= 4; i++) {
+        const spot = document.createElement("div");
+        spot.className = "spot urinal";
+
+        const u = document.createElement("img");
+        u.src = IMG_URINAL;
+        u.className = "urinal-img";
+        spot.appendChild(u);
+
+        if (levels[currentLevel].occupied.includes(i)) {
+            const m = document.createElement("img");
+            m.src = IMG_MANN;
+            m.className = "mann";
+            spot.appendChild(m);
+        } else {
+            spot.onclick = () => select(i, spot);
+        }
+
+        game.appendChild(spot);
+        game.appendChild(spacer(5));
+    }
+
+    const door = document.createElement("div");
+    door.className = "spot door";
+    door.onclick = () => select("door", door);
+
+    const dimg = document.createElement("img");
+    dimg.src = IMG_DOOR;
+    door.appendChild(dimg);
+
+    game.appendChild(door);
+    game.appendChild(spacer(10));
+}
+
+function select(choice, el) {
+    if (locked) return;
+    locked = true;
+
+    const level = levels[currentLevel];
+
+    if (choice === level.correct) {
+        el.classList.add("correct");
+        showMessage(`<b>Richtig!</b><br>${level.explanation}`);
+        setTimeout(nextLevel, 3500);
+    } else {
+        el.classList.add("wrong");
+        showMessage(`<b>Falsch.</b><br>${level.explanation}`);
+
+        // HAPTIC FEEDBACK
+        if (navigator.vibrate) {
+            navigator.vibrate(120);
+        }
+
+        setTimeout(renderLevel, 3500);
+    }
+}
+
+function nextLevel() {
+    currentLevel++;
+    if (currentLevel >= levels.length) {
+        endGame();
+    } else {
+        renderLevel();
+    }
+}
+
+function endGame() {
+    const game = document.getElementById("game");
+    game.innerHTML = '<div id="floor"></div>';
+
+    // Außentür mittig auf Bodenlinie
+    const outsideDoor = document.createElement("img");
+    outsideDoor.src = IMG_DOOR_OUTSIDE;
+    outsideDoor.className = "outside-door";
+    game.appendChild(outsideDoor);
+
+const msg = document.getElementById("message");
+msg.classList.add("end");
+
+showMessage("<b>Spiel beendet.</b><br>Manchmal ist Gehen die einzig richtige Entscheidung.");
+
+    const btn = document.getElementById("restart");
+    btn.style.display = "inline-block";
+    btn.scrollIntoView({ block: "center" });
+}
+
+
+function restartGame() {
+    currentLevel = 0;
+
+    document.getElementById("message").classList.remove("end");
+    document.getElementById("restart").style.display = "none";
+
+    renderLevel();
+}
+
+
+renderLevel();
+</script>
+
+</body>
+</html>
